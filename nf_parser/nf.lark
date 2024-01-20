@@ -1,0 +1,162 @@
+%import common.LETTER
+%import common.DIGIT
+%import common.INT
+%import common.CNAME
+%import common.SIGNED_NUMBER
+%import common.FLOAT
+%import common.NUMBER
+%import common.SIGNED_NUMBER
+%import common.ESCAPED_STRING
+%import common.WS
+%import common.NEWLINE
+%import common.WS_INLINE
+%import common.SH_COMMENT
+%import common.C_COMMENT
+%import common.CPP_COMMENT
+%import common.WORD
+
+// Refs:
+//   - https://github.com/lark-parser/lark/blob/master/lark/grammars/python.lark
+?start: ( comment | dsl | module_entry | parameter_entry | workflow_block | process_block )*
+?config: (config_expression | config_block)*
+
+// import_entry: "import" CNAME ("," CNAME)* WS "from" WS  CNAME _NEWLINE
+
+comment.1: ((SH_COMMENT | COMMENT) NEWLINE?)+
+PARAM_COMMENT.2: COMMENT
+
+dsl: "nextflow.enable.dsl" "=" (NUMBER | STRING)? NEWLINE?
+
+module_entry: "include" "{" CNAME ("," CNAME)* "}" "from" FILE_PATH NEWLINE?
+
+parameter_entry: "params" "." CNAME "=" VALUE? PARAM_COMMENT? NEWLINE?
+
+process_block: "process" CNAME "{" process_body "}" NEWLINE?
+
+workflow_block: "workflow" CNAME? "{" workflow_body "}" NEWLINE?
+
+process_body: (script | shell | input | output | directive | comment)+
+// process_body: (inputs? | outputs? | container? | shell | script)
+
+// process_comment: (COMMENT NEWLINE?)+
+input: "input:" WS? (input_def | comment)+ NEWLINE?
+output: "output" ":" WS? (output_def | comment)+ NEWLINE?
+//script: "script:"? WS? SCRIPT NEWLINE?
+script: "script:"? WS? comment? (SCRIPT | conditional_script) comment? NEWLINE?
+//script: "script"? ":"? SCRIPT+
+//shell: "shell:" (script_body | conditional_script)
+script_body:  SCRIPT
+// conditional_script: WS? /(?:if\s+|else\s+if\s+|else\s+)(\([^\)]+\))\s*\{(?:[^{}]*|\{[^{}]*\})*\}/m NEWLINE?
+//conditional_script: "if" "(" WS_INLINE? comparison_expression WS_INLINE?  ")" WS? SCRIPT NEWLINE? ("else" WS_INLINE? "if" WS_INLINE? "(" comparison_expression WS_INLINE? ")" WS? SCRIPT NEWLINE? )? ("else" WS? SCRIPT NEWLINE?)?
+conditional_script: (if_script | else_if_script | else_script)+
+
+if_script: "if" "(" comparison_expression ")" WS? SCRIPT NEWLINE? 
+else_if_script: "else" "if" "(" comparison_expression ")" SCRIPT NEWLINE? 
+else_script: "else"  SCRIPT 
+
+shell: "shell:" WS? (SCRIPT | COMMENT) NEWLINE?
+exec: "exec:" WS? (EXEC_SCRIPT | COMMENT) NEWLINE?
+directive: DIRECTIVE_TYPE WS_INLINE? expression NEWLINE?
+DIRECTIVE_TYPE: "accelerator" | "beforeScript" | "afterScript"
+                | "cache" | "clusterOptions" | "conda" | "spack"
+                | "container" | "containerOptions" | "cpus" | "debug"
+                | "disk" | "echo" | "errorStrategy" | "executor"
+                | "ext" | "fair" | "label" | "machineType"
+                | "maxErrors" | "maxForks" | "maxRetries" | "memory"
+                | "module" | "penv" | "pod" | "publishDir"
+                | "queue" | "resourceLabels" | "scratch" | "storeDir"
+                | "stageInMode" | "stageOutMode" | "tag" | "time"
+
+EXP: VALUE WS_INLINE? ("," OPT)?
+expression: VALUE WS_INLINE? ("," option)?
+OPT: CNAME ("=" | ":") VALUE
+option: CNAME ("=" | ":") VALUE
+dynamic_directive: "{" /([\s\S]*?)/  "}"
+
+STDOUT: "stdout"
+TUPLE: "tuple"
+QUALIFIER: "val" | "env" | "file" | "path"
+input_def: (( QUALIFIER | "stdin" | "each") expression | tuple_def)  NEWLINE?
+output_def: (STDOUT | QUALIFIER expression |  tuple_def)  NEWLINE?
+tuple_item: QUALIFIER "(" expression ")"
+tuple_def: TUPLE tuple_item ("," tuple_item)+ NEWLINE?
+
+workflow_body: (take | body | emit)+
+take: "take" ":" WS? (CNAME | COMMENT)+ NEWLINE?
+body: "main"? ":"? WS? (function_call | pipe_func_call | func_dot_call | COMMENT )+ NEWLINE?
+emit: "emit" ":" WS? (emit_arg | emit_named_arg | COMMENT)+ NEWLINE?
+//instruction: function_call NEWLINE?
+emit_arg: CNAME "." CNAME NEWLINE?
+emit_named_arg: CNAME "=" emit_arg NEWLINE?
+
+config_scope: "dag" | "process" | "env" | "profiles" 
+            | "aws" | "charliecloud" | "docker" | "notification"
+            | "cloud" | "conda" | "manifest" | "params"
+            | "podman" | "spack" | "sarus" | "shifter"
+            | "singularity" | "timeline" | "tower" | "trace"
+            | "weblog" | "nextflowVersion" | "k8s" | "mail"
+//config_expression: WORD ("." CNAME)*  WS_INLINE? "=" WS_INLINE? VALUE NEWLINE?
+config_expression: (config_scope | WORD) ("." IDENTIFIER)*  WS_INLINE? "=" WS_INLINE? VALUE NEWLINE?
+config_block: config_scope "{" WS? (config_expression | config_block)+ "}"
+
+?unknown_entry: NON_EMPTY_STRING
+array: "[" [ VALUE [ "," VALUE ]* ] "]"
+object: "{" [ IDENTIFIER ":" VALUE [ "," IDENTIFIER ":" VALUE ]* ] "}"
+param_script_ref: "$" CNAME ( "." CNAME )*
+string_interpolation: "${" SCRIPT "}"
+//boolean_expression: script_body WS_INLINE? boolean_operator WS_INLINE? script_body
+//arithmetic_expression: script_body WS_INLINE? arithmetic_operator WS_INLINE? script_body
+comparison_expression: VALUE WS_INLINE? (COMPARISON_OPERATOR WS_INLINE? VALUE)?
+func_arg: VALUE ( "." VALUE )?
+//func_def: "def" CNAME(CNAME) "{" func_body "}"
+//func_body: CNAME // TODO
+func_dot_call:  CNAME? "." function_call
+function_call:  CNAME "(" func_arg?  ( "," func_arg )* ")" "\\"? NEWLINE?
+pipe_func_call: "|" CNAME "\\"? NEWLINE?
+
+channel_call: ("channel" | "channel") "." (CHANNEL_FACTORY | OPERATOR_FUNC) function_call NEWLINE?
+CHANNEL_FACTORY: "fromList" | "fromPath" | "fromFilePairs" | "fromSRA" | "from" | "of" | "empty" | "value" | "watchPath"
+OPERATOR_FUNC: "branch"|"buffer"|"close"|"collate"|"collect"|"collectFile"|"combine"|"concat"|"count"|"countBy"|"cross"
+               |"distinct"|"dump"|"filter"|"first"|"flatMap"|"flatten"|"groupTuple"|"ifEmpty"|"join"|"last"|"map"|"max"|"merge"|"min"|"mix"|"multiMap"|"randomSample"
+               |"reduce"|"set"|"splitCsv"|"splitFasta"|"splitFastq"|"splitText"|"sum"|"take"|"tap"|"toInteger"|"toList"|"toSortedList"|"transpose"|"unique"|"until"|"view"
+
+VALUE: CNAME | SIGNED_NUMBER | NUMBER | STRING | BOOLEAN | REFERENCE
+IDENTIFIER: (LETTER | "_" | "$" | DIGIT) (LETTER | DIGIT | "_" | "-") *
+SHELL_SCRIPT: /'''(?:[^'\\]|\\.)*'''/m
+SHELL_SCRIPT_WITH_ERROR: TRIPLE_QUOTED_STRING
+BASH_SCRIPT: /\"{3}([\s\S]*?)\"{3}/m
+EXEC_SCRIPT: /.*?/s
+SCRIPT: SHELL_SCRIPT | BASH_SCRIPT | SHELL_SCRIPT_WITH_ERROR
+FILE_PATH: STRING
+LINE_COMMENT: CPP_COMMENT | C_COMMENT
+REFERENCE: "$" CNAME
+//PARAMETER_MAP: "{" [CNAME ("," CNAME)*] "}"
+//PARAMETER_LIST: "[" CNAME ("," CNAME)* "]"
+//PARAMETER_STRUCTURE: "{" [CNAME ("," CNAME)*] "}"
+BOOLEAN: "true" | "false"
+EVENT_NAME: CNAME
+_NEWLINE.1: /\n/
+//_NEWLINE: /[\t\f\r\n]/+
+TEMPLATE_STRING: ESCAPED_STRING
+STRING: SQUOTED_STRING | DQUOTED_STRING
+SQUOTED_STRING: /'[^']*'/
+DQUOTED_STRING: /"[^"]*"/
+QUOTED_STRING: "'" /.*/ "'" | ESCAPED_STRING
+TRIPLE_QUOTED_STRING: "'''" /([\s\S]*?)/ "'''" // if was captured means the shell script has errors
+//ESC_STRING: /'[^'\\]*(?:\\.[^'\\]*)*'/ | /"[^"\\]*(?:\\.[^"\\]*)*"/
+COMMENT.1: C_COMMENT | CPP_COMMENT
+UNKNOWN: /[^\n]*\n/
+NON_EMPTY_STRING: /[^\s]+/
+ARITHMETRIC_OPERATOR: "+" | "-" | "*" | "/" | "%"
+COMPARISON_OPERATOR: "==" | "!=" | "<" | ">" | "<=" | ">="
+BOOLEAN_OPERATOR: "&&" | "||"
+//operator: "+" | "&" | "|" | "<<" | ">>" | "-" | "*" | "/" | "%" | "^" | "!" | "~" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&=" | "^=" | "|=" | "<<=" | ">>=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**="
+//LINE_CONT: /\\?\n/
+
+%ignore WS
+%ignore WS_INLINE
+%ignore NEWLINE
+%ignore /\\[\t \f]*\r?\n/   // LINE_CONT
+//%ignore DISABLED_PARAM
+//%ignore _NEWLINE
+//%ignore UNKNOWN

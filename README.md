@@ -8,9 +8,35 @@ parse nextflow syntax to structured json/yaml and pythonic objects
 $ pip install nf_parser
 ```
 
+## Installation
+
+```bash
+$ pip install nf_parser
+```
+
+## Dependecies
+
+- python >=3.8
+
 ## Usage
 
-- TODO
+```
+from nf_parser import Parser
+
+nf_file = './tests/nf/test3.nf'
+schema = Parser().parse(path=nf_file)
+print(schema)
+```
+
+## Testing
+
+`pytest`
+
+## Development
+
+```bash
+poetry install
+```
 
 ## Contributing
 
