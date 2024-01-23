@@ -10,7 +10,7 @@ from .nextflow import Nextflow
 """
 
 class Parser:
-	def __init__(self, ):
+	def __init__(self):
 		self.comments = []
 		file = get_grammer()
 		#file = f'./nf.lark'

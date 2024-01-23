@@ -1,1 +1,3 @@
-from nf_parser import nf_parser
+from nf_parser import Parser
+
+Parser()
