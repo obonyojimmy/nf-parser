@@ -1,0 +1,99 @@
+?start: (shebang | comment | dsl | param | module | workflow | process | function )*
+// | include | process | workflow
+
+// basic definations
+shebang: SH_COMMENT
+dsl: "nextflow.enable.dsl" "=" (NUMBER | STRING)?
+comment: C_COMMENT | CPP_COMMENT
+module: "include" "{" CNAME (";" CNAME)* "}" "from" STRING
+param: "params." CNAME "=" value? comment?
+function: "def" CNAME "(" arg?  ( "," arg )* ")" "{" code_block "}"
+// workflow definations
+workflow: "workflow" CNAME? "{" workflow_block "}"
+workflow_block: take | main | emit
+take: "take" ":" CNAME -> workflow_input
+main: "main"? ":"? (channel_call | function_call)+
+emit: "emit" ":" (wf_output | wf_name_output)+
+wf_output: CNAME "." CNAME
+wf_name_output: CNAME "=" wf_output
+channel: ("Channel" | "channel") "." channel_type "(" arg  ( "," arg )* ")"
+channel_call: "def"? variable? "="? channel
+function_call: "def"? variable? "="? identifier "(" arg?  ( "," arg )* ")"
+
+// process definations
+process: "process" CNAME "{" process_block "}"
+process_block: (input | output | script | shell | directive)*
+input: "input:" (val | file | path | env)
+output: "output:" (val | file | path | env)
+script: "script:"? (bash_script | shell_script | template)
+shell: "shell:" shell_script
+exec: "exec:" STATEMENT
+directive: (container | cpus | memory)
+
+// script constructs
+bash_script: /"{3}([\s\S]*?)"{3}/m
+shell_script: /'{3}([\s\S]*?)'{3}/m
+template: "template" STRING -> script_path
+
+// input/output constructs
+val: "val" declaration
+file: "file" declaration
+path: "path" declaration
+env: "env" CNAME -> variable
+stdin: "stdin" declaration?
+tuple: "tuple" declaration
+each: "each" declaration
+
+// process directives
+cpus: "cpus" INT
+memory: "memory" INT
+container: "container" value
+
+// GENERAL
+arg: CNAME ( "." CNAME )?
+variable: CNAME
+identifier: CNAME
+declaration: CNAME | STRING
+value:  FLOAT -> float
+        | INT -> int
+        | SQUOTED_STRING -> string
+        | DQUOTED_STRING -> string
+code_block: /[^}]+/
+STATEMENT: /.*/
+STRING: SQUOTED_STRING | DQUOTED_STRING
+SQUOTED_STRING: /'[^']*'/
+DQUOTED_STRING: /"[^"]*"/
+
+// channels
+channel_type: "fromList" | "fromPath" | "fromFilePairs" | "fromSRA" | "from" | "of" | "empty" | "value" | "watchPath"
+directive_type: "accelerator" | "beforeScript" | "afterScript"
+                | "cache" | "clusterOptions" | "conda" | "spack"
+                | "container" | "containerOptions" | "cpus" | "debug"
+                | "disk" | "echo" | "errorStrategy" | "executor"
+                | "ext" | "fair" | "label" | "machineType"
+                | "maxErrors" | "maxForks" | "maxRetries" | "memory"
+                | "module" | "penv" | "pod" | "publishDir"
+                | "queue" | "resourceLabels" | "scratch" | "storeDir"
+                | "stageInMode" | "stageOutMode" | "tag" | "time"
+// directive_value: VALUE WS_INLINE? ("," option)?
+OPERATOR_FUNC: "branch"|"buffer"|"close"|"collate"|"collect"|"collectFile"|"combine"|"concat"|"count"|"countBy"|"cross"
+               |"distinct"|"dump"|"filter"|"first"|"flatMap"|"flatten"|"groupTuple"|"ifEmpty"|"join"|"last"|"map"|"max"|"merge"|"min"|"mix"|"multiMap"|"randomSample"
+               |"reduce"|"set"|"splitCsv"|"splitFasta"|"splitFastq"|"splitText"|"sum"|"take"|"tap"|"toInteger"|"toList"|"toSortedList"|"transpose"|"unique"|"until"|"view"
+
+%import common.CNAME
+%import common.SH_COMMENT
+%import common.C_COMMENT
+%import common.CPP_COMMENT
+%import common.ESCAPED_STRING
+%import common.ESCAPED_CHAR
+%import common.WS
+%import common.WS_INLINE
+%import common.NEWLINE
+%import common.SIGNED_INT
+%import common.FLOAT
+%import common.NUMBER
+%import common.INT
+%import common.SIGNED_NUMBER
+
+%ignore WS
+%ignore NEWLINE

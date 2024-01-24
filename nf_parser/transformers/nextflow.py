@@ -1,7 +1,7 @@
 from pathlib import Path
 from lark import Lark, Transformer, v_args, Discard, Tree, Token
 import re
-from . import utils
+from .. import utils
 
 #__dir__ = Path(__file__).parent
 

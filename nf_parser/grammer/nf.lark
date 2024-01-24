@@ -156,7 +156,7 @@ BOOLEAN_OPERATOR: "&&" | "||"
 %ignore WS
 %ignore WS_INLINE
 %ignore NEWLINE
-%ignore /\\[\t \f]*\r?\n/   // LINE_CONT
+//%ignore /\\[\t \f]*\r?\n/   // LINE_CONT
 //%ignore DISABLED_PARAM
 //%ignore _NEWLINE
 //%ignore UNKNOWN

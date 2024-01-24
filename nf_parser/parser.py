@@ -2,7 +2,7 @@ from lark import Lark, Transformer, v_args, Discard, Tree, Token
 import re
 from pathlib import Path
 from .utils import get_grammer
-from .nextflow import Nextflow
+from .transformers.nextflow import Nextflow
 
 """ 
 	Links:

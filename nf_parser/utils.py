@@ -1,17 +1,16 @@
-import pathlib
+from pathlib import Path
 from importlib import resources
 
-def get_grammer():
-	"""Get path to example "Flatland" [1]_ text file.
+def get_grammer() -> str:
+	"""Get grammer
 
 	Returns
 	-------
-	pathlib.PosixPath
-		Path to file.
+	str: the grammer content
 	"""
-	with resources.path("nf_parser", "nf.lark") as f:
-		grammer_file_path = f
-	return grammer_file_path
+	with resources.path("nf_parser", "grammer/nf.lark") as f:
+		grammer= Path(f).read_text()
+	return grammer
 
 def value_type(value):
 	if value.isdigit():
