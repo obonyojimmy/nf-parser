@@ -1,7 +1,8 @@
 ?start: (shebang | comment | dsl | param | module_import | workflow | process | function | channel | function_call )*
 // | include | process | workflow
 
-// coew definations
+// core definations
+// shebang: /^(#!).*$/
 shebang: SH_COMMENT
 dsl.2: "nextflow.enable.dsl=" INT
 comment: (C_COMMENT | CPP_COMMENT)

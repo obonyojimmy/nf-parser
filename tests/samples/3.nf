@@ -45,7 +45,7 @@ process baz {
     // a comment
     // a comment
     storeDir "${params.cachedir}/${pdb.baseName}"
-    //publishDir "${params.outdir}", mode: 'copy'
+    publishDir "${params.outdir}", mode: 'copy'
 
     input:
     // some comment
