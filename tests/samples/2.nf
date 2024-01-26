@@ -1,4 +1,6 @@
 process align {
+    publishDir "${params.outdir}", mode: 'copy'
+    
     input:
     // some comment
     /* file input_file */

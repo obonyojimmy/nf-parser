@@ -39,16 +39,17 @@ template: "template" STRING -> script_path
 if_script: /(if\s*?\([^)]*\)\s*\{([^}]*)\}|if\s*?\([^)]*\)\s*\n([^}]*))/m
 elif_script: /(else\sif\s*?\([^)]*\)\s*\{([^}]*)\}|else\sif\s*?\([^)]*\)\s*\n([^}]*))/m
 else_script: /(else\s*?\{([^}]*)\}|else\s*?\n([^}]*))/m
-conditional_script: if_script | (if_script elif_script) | (if_script elif_script? else_script)
+// conditional_script: if_script | (if_script elif_script) | (if_script elif_script? else_script)
+conditional_script: if_script | elif_script+ | else_script
 
 // input/output constructs
-val: "val" declaration
-file: "file" declaration
-path: "path" declaration
-env: "env" CNAME -> env_var
-stdin: "stdin" declaration?
-tuple: "tuple" declaration
-each: "each" declaration
+val: "val" value
+file: "file" value
+path: "path" value
+env: "env" value
+stdin: "stdin" value?
+tuple: "tuple" value
+each: "each" value
 
 // process directives
 accelerator: "accelerator" value ("," value)*
@@ -93,14 +94,13 @@ arg: CNAME ( "." CNAME )?
 variable: CNAME
 identifier: CNAME
 declaration: CNAME | STRING
-value:  FLOAT -> float
+?value:  FLOAT -> float
         | INT -> int
         | SQUOTED_STRING -> string
         | DQUOTED_STRING -> string
-        | variable
-        | CNAME ":" (NUMBER|STRING|variable) -> map
+        | CNAME -> variable
+        | CNAME ":" (NUMBER|STRING|CNAME) -> map
         //| ("," value)* -> list
-
 code_block: /[^}]+/
 statement:  /[^\s]+/
 PATH: /'[^']*'|"[^"]*"/

@@ -5,6 +5,8 @@ description = "parse and inspect nextflow DSL scripts to pythonic structures and
 authors = ["obonyojimmy <cliffjimmy27@gmail.com>"]
 license = "MIT"
 readme = "README.md"
+homepage = "https://github.com/obonyojimmy/nf-parser"
+repository = "https://github.com/obonyojimmy/nf-parser"
 
 [tool.poetry.dependencies]
 python = "^3.9"
