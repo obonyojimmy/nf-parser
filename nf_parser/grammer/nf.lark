@@ -1,0 +1,193 @@
+?start: (shebang | comment | dsl | param | module_import | workflow | process | function | channel | function_call )*
+// | include | process | workflow
+
+// coew definations
+shebang: SH_COMMENT
+dsl.2: "nextflow.enable.dsl=" INT
+comment: (C_COMMENT | CPP_COMMENT)
+module_import: "include" "{" CNAME (";" CNAME)* "}" "from" STRING
+param: "params." CNAME "=" value? comment?
+//param: /params.(\w+)\s?=\s?/ value? comment?
+function: "def" CNAME "(" parameters? ")" "{" code_block "}"
+workflow: "workflow" CNAME? "{" workflow_block "}"
+//workflow: /workflow\s*?(\S+)?\s*?{(([\s\S])*?)+}/ms
+process: "process" CNAME "{" process_block "}"
+//process: /process\s*?(\S+)?\s*?(\{(?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*\})/ms
+
+// workflow definations
+workflow_block: (workflow_input | main | emit)* comment*
+workflow_input: "take" ":" CNAME
+main: "main"? ":"? comment? (channel | function_call | operator)+
+emit: "emit" ":" (wf_output | wf_named_output)+
+wf_output: CNAME "." CNAME
+wf_named_output: CNAME "=" wf_output
+//channel: ("Channel" | "channel") "." channel_type "(" parameters? ")"
+//channel_call: ("def" WS_INLINE)? (variable "=")? channel
+//function_call: ("def" WS_INLINE)? (variable? "=")? identifier "(" parameters? ")"
+// https://regex101.com/r/tJYVJm/1
+channel: /(\w+\s*?=)?\s*?[C|c]hannel\s*?(\.(fromList|fromPath|fromFilePairs|fromSRA|from|of|empty|value|watchPath)\(([\s\S]*?)\))/ //operator*
+//channel: (/(((\w+)\s*?=)?\s*?[C|c]hannel\s*?(\.(fromList|fromPath|fromFilePairs|fromSRA|from|of|empty|value|watchPath)\(([\s\S]*?)\))|(w+))/ operator* | CNAME) 
+function_call:  /((\w+)\s*?=)?\s*?(\w+)\(([\s\S]*?)\)(\.\w+)?/
+chained_function:  /\s+\.\S+\(((\S+)(\s+)?,?)?\)(\.(\S+))?/
+//assignment: variable "=" identifier "(" parameters? ")"
+//assignment: /(w+)\s?=\s?(\w+)\(([\s\S]*?)\)/
+
+// process definations
+process_block: (input | output | script | shell | directive)* comment?
+input: "input:" (val | file | path | env)+
+output: "output:" (val | file | path | env)+
+script: "script:"? (bash_script | shell_script | template)
+shell: "shell:" shell_script
+exec: "exec:" statement
+directive: (accelerator | before_script | after_script | cluster_options | conda| cache | cpus | container | container_options | debug | disk | echo | error_strategy | executor | ext | fair | label | machine_type | max_errors | max_forks | max_retries | memory | module penv | pod | publish_dir | queue | resource_labels | scratch | spack | store_dir | stage_in_mode | stage_out_mode | tag | time)
+
+// script constructs
+bash_script: /"{3}([\s\S]*?)"{3}/m
+shell_script: /'{3}([\s\S]*?)'{3}/m
+template: "template" STRING -> script_path
+
+// input/output constructs
+val: "val" declaration
+file: "file" declaration
+path: "path" declaration
+env: "env" CNAME -> env_var
+stdin: "stdin" declaration?
+tuple: "tuple" declaration
+each: "each" declaration
+
+// process directives
+accelerator: "accelerator" value
+before_script: "beforeScript" value
+after_script: "afterScript" value
+cluster_options: "clusterOptions" value
+conda: "conda" value
+cache: "cache" value
+cpus: "cpus" INT
+container: "container" value
+container_options: "containerOptions" value
+debug: "debug" value
+disk: "disk" value
+echo: "echo" value
+error_strategy: "errorStrategy" value
+executor: "executor" value
+ext: "ext" value
+fair: "fair" value
+label: "label" value
+machine_type: "machineType" value
+max_errors: "maxErrors" value
+max_forks: "maxForks" value
+max_retries: "maxRetries" value
+memory: "memory" NUMBER
+module: "module" value
+penv: "penv" value
+pod: "pod" value
+publish_dir: "publishDir" value
+queue: "queue" value
+resource_labels: "resourceLabels" value
+scratch: "scratch" value
+spack: "spack" value
+store_dir: "storeDir" value
+stage_in_mode: "stageInMode" value
+stage_out_mode: "stageOutMode" value
+tag: "tag" value
+time: "time" value
+
+// GENERAL
+parameters: arg ("," arg)*
+arg: CNAME ( "." CNAME )?
+variable: CNAME
+identifier: CNAME
+declaration: CNAME | STRING
+value:  FLOAT -> float
+        | INT -> int
+        | SQUOTED_STRING -> string
+        | DQUOTED_STRING -> string
+code_block: /[^}]+/
+statement:  /[^\s]+/
+PATH: /'[^']*'|"[^"]*"/
+//unknown_entry: /[^\n]+\n/
+//unknown_entry: /\w*?/
+STRING: SQUOTED_STRING | DQUOTED_STRING
+SQUOTED_STRING: /'[^']*'/
+DQUOTED_STRING: /"[^"]*"/
+
+// channels
+//channel_type: "fromList" | "fromPath" | "fromFilePairs" | "fromSRA" | "from" | "of" | "empty" | "value" | "watchPath"
+
+// directive_value: VALUE WS_INLINE? ("," option)?
+
+// channel operators
+//operator: (/\.(branch|buffer|collate|collect|collectFile|combine|concat|count|countFasta|countJson|countLines|cross|distinct|dump|filter|first|flatMap|flatten|groupTuple|ifEmpty|join|last|map|max|merge|min|mix|multiMap|randomSample|reduce|set|splitCsv|splitFasta|splitFastaq|splitJson|splitText|subscribe|sum|take|tap|toInteger|toLong|toFloat|toDouble|toList|toSortedList|transpose|unique|until|view)\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/ | /\.(branch|buffer|collate|collect|collectFile|combine|concat|count|countFasta|countJson|countLines|cross|distinct|dump|filter|first|flatMap|flatten|groupTuple|ifEmpty|join|last|map|max|merge|min|mix|multiMap|randomSample|reduce|set|splitCsv|splitFasta|splitFastaq|splitJson|splitText|subscribe|sum|take|tap|toInteger|toLong|toFloat|toDouble|toList|toSortedList|transpose|unique|until|view)\s*?\((.*?)\)/ )
+//operator: (/(\w+\s*?)?\.(branch|buffer|collate|collect|collectFile|combine|concat|count|countFasta|countJson|countLines|cross|distinct|dump|filter|first|flatMap|flatten|groupTuple|ifEmpty|join|last|map|max|merge|min|mix|multiMap|randomSample|reduce|set|splitCsv|splitFasta|splitFastaq|splitJson|splitText|subscribe|sum|take|tap|toInteger|toLong|toFloat|toDouble|toList|toSortedList|transpose|unique|until|view)\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/ | /(\w+\s*?)?\.(branch|buffer|collate|collect|collectFile|combine|concat|count|countFasta|countJson|countLines|cross|distinct|dump|filter|first|flatMap|flatten|groupTuple|ifEmpty|join|last|map|max|merge|min|mix|multiMap|randomSample|reduce|set|splitCsv|splitFasta|splitFastaq|splitJson|splitText|subscribe|sum|take|tap|toInteger|toLong|toFloat|toDouble|toList|toSortedList|transpose|unique|until|view)\s*?\((.*?)\)/ )
+operator: /(\w+\s*?)?\.(branch|buffer|collate|collect|collectFile|combine|concat|count|countFasta|countJson|countLines|cross|distinct|dump|filter|first|flatMap|flatten|groupTuple|ifEmpty|join|last|map|max|merge|min|mix|multiMap|randomSample|reduce|set|splitCsv|splitFasta|splitFastaq|splitJson|splitText|subscribe|sum|take|tap|toInteger|toLong|toFloat|toDouble|toList|toSortedList|transpose|unique|until|view)\s*?(\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}|(\((.*?)\)))/ 
+//| /(\w+\s*?)?\.(branch|buffer|collate|collect|collectFile|combine|concat|count|countFasta|countJson|countLines|cross|distinct|dump|filter|first|flatMap|flatten|groupTuple|ifEmpty|join|last|map|max|merge|min|mix|multiMap|randomSample|reduce|set|splitCsv|splitFasta|splitFastaq|splitJson|splitText|subscribe|sum|take|tap|toInteger|toLong|toFloat|toDouble|toList|toSortedList|transpose|unique|until|view)\s*?\((.*?)\)/ )
+
+//operator: (branch | buffer | collate | collect | collect_file | combine |  concat | count | count_fasta | count_json | count_lines | cross | distinct |  dump | filter | first | flat_map | flatten | group_tuple | if_empty | join | last | map | max | merge | min | mix | multi_map | random_sample | reduce | set | split_csv | split_fasta | split_fastaq | split_json | split_text | subscribe | sum | take | tap | to_integer | to_long | to_float | to_double | to_list | to_sorted_list | transpose | unique | until | view)
+branch: /\.branch\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s  
+buffer: /\.buffer\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.buffer\s*?\((.*?)\)/s
+collate: /\.collate\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.collate\s*?\((.*?)\)/s
+collect: /\.collect\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.collect\s*?\((.*?)\)/s
+collect_file: /\.collectFile\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.collectFile\s*?\((.*?)\)/s
+combine: /\.combine\s*?\((.*?)\)/s
+concat: /\.concat\s*?\((.*?)\)/s
+count: /\.count\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.count\s*?\((.*?)\)/s
+count_fasta: /\.countFasta\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.countFasta\s*?\((.*?)\)/s
+count_json: /\.countJson\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.countJson\s*?\((.*?)\)/s
+count_lines: /\.countLines\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.countLines\s*?\((.*?)\)/s
+cross: /\.cross\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.cross\s*?\((.*?)\)/s
+distinct: /\.distinct\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.distinct\s*?\((.*?)\)/s
+dump: /\.dump\s*?\((.*?)\)/s
+filter: /\.filter\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.filter\s*?\((.*?)\)/s
+first: /\.first\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.first\s*?\((.*?)\)/s
+flat_map: /\.flatMap\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.flatMap\s*?\((.*?)\)/s
+flatten: /\.flatten\s*?\((.*?)\)/s
+group_tuple: /\.groupTuple\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.groupTuple\s*?\((.*?)\)/s
+if_empty: /\.ifEmpty\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.ifEmpty\s*?\((.*?)\)/s
+join: /\.join\s*?\((.*?)\)/s
+last: /\.last\s*?\((.*?)\)/s
+map: /\.map\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.map\s*?\((.*?)\)/s
+max: /\.max\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.max\s*?\((.*?)\)/s
+merge: /\.merge\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.merge\s*?\((.*?)\)/s
+min: /\.min\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.min\s*?\((.*?)\)/s
+mix: /\.mix\s*?\((.*?)\)/s
+multi_map: /\.multiMap\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.multiMap\s*?\((.*?)\)/s
+random_sample: /\.randomSample\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.randomSample\s*?\((.*?)\)/s
+reduce: /\.reduce\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.reduce\s*?\((.*?)\)/s
+set: /\.set\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s
+split_csv: /\.splitCsv\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.splitCsv\s*?\((.*?)\)/s
+split_fasta: /\.splitFasta\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.splitFasta\s*?\((.*?)\)/s
+split_fastaq: /\.splitFastq\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.splitFastq\s*?\((.*?)\)/s
+split_json: /\.splitJson\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.splitJson\s*?\((.*?)\)/s
+split_text: /\.splitText\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.splitText\s*?\((.*?)\)/s
+subscribe: /\.subscribe\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.subscribe\s*?\((.*?)\)/s
+sum: /\.sum\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.sum\s*?\((.*?)\)/s
+take: /\.take\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.take\s*?\((.*?)\)/s
+tap: /\.tap\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.tap\s*?\((.*?)\)/s
+to_integer: /\.toInteger\s*?\((.*?)\)/s
+to_long: /\.toLong\s*?\((.*?)\)/s
+to_float: /\.toFloat\s*?\((.*?)\)/s
+to_double: /\.toDouble\s*?\((.*?)\)/s
+to_list: /\.toList\s*?\((.*?)\)/s
+to_sorted_list: /\.toSortedList\s*?\((.*?)\)/s
+transpose: /\.transpose\s*?\((.*?)\)/s
+unique: /\.unique\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.unique\s*?\((.*?)\)/s
+until: /\.until\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.until\s*?\((.*?)\)/s
+view: /\.view\s*?\{((?:[^}{]+|\{(?:[^}{]+|\{[^}{]*\})*\})*)\}/s | /\.view\s*?\((.*?)\)/s
+
+%import common.CNAME
+%import common.SH_COMMENT
+%import common.C_COMMENT
+%import common.CPP_COMMENT
+%import common.ESCAPED_STRING
+%import common.ESCAPED_CHAR
+%import common.WS
+%import common.WS_INLINE
+%import common.NEWLINE
+%import common.SIGNED_INT
+%import common.FLOAT
+%import common.NUMBER
+%import common.INT
+%import common.SIGNED_NUMBER
+
+%ignore WS
+%ignore NEWLINE
