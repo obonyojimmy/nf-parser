@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "nf_parser"
 version = "0.0.1"
-description = "parse nextflow syntax to structured pythonic objects"
+description = "parse and inspect nextflow DSL scripts to pythonic structures and more. "
 authors = ["obonyojimmy <cliffjimmy27@gmail.com>"]
 license = "MIT"
 readme = "README.md"

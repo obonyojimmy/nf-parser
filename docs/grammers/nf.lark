@@ -33,10 +33,10 @@ chained_function:  /\s+\.\S+\(((\S+)(\s+)?,?)?\)(\.(\S+))?/
 //assignment: /(w+)\s?=\s?(\w+)\(([\s\S]*?)\)/
 
 // process definations
-process_block: (input | output | script | shell | directive)* comment?
-input: "input:" (val | file | path | env)+
-output: "output:" (val | file | path | env)+
-script: "script:"? (bash_script | shell_script | template)
+process_block: (input | output | script | shell | directive | comment)*
+input: "input:" comment* (val | file | path | env)+
+output: "output:" comment* (val | file | path | env)+
+script: ("script:" comment* | "script:"?) WS? (bash_script | shell_script | template | conditional_script)
 shell: "shell:" shell_script
 exec: "exec:" statement
 directive: (accelerator | before_script | after_script | cluster_options | conda| cache | cpus | container | container_options | debug | disk | echo | error_strategy | executor | ext | fair | label | machine_type | max_errors | max_forks | max_retries | memory | module penv | pod | publish_dir | queue | resource_labels | scratch | spack | store_dir | stage_in_mode | stage_out_mode | tag | time)
@@ -45,6 +45,10 @@ directive: (accelerator | before_script | after_script | cluster_options | conda
 bash_script: /"{3}([\s\S]*?)"{3}/m
 shell_script: /'{3}([\s\S]*?)'{3}/m
 template: "template" STRING -> script_path
+if_script: /(if\s*?\([^)]*\)\s*\{([^}]*)\}|if\s*?\([^)]*\)\s*\n([^}]*))/m
+elif_script: /(else\sif\s*?\([^)]*\)\s*\{([^}]*)\}|else\sif\s*?\([^)]*\)\s*\n([^}]*))/m
+else_script: /(else\s*?\{([^}]*)\}|else\s*?\n([^}]*))/m
+conditional_script: if_script | (if_script elif_script) | (if_script elif_script? else_script)
 
 // input/output constructs
 val: "val" declaration
@@ -81,7 +85,7 @@ memory: "memory" NUMBER
 module: "module" value
 penv: "penv" value
 pod: "pod" value
-publish_dir: "publishDir" value
+publish_dir: "publishDir" value ("," value)*
 queue: "queue" value
 resource_labels: "resourceLabels" value
 scratch: "scratch" value
@@ -102,6 +106,9 @@ value:  FLOAT -> float
         | INT -> int
         | SQUOTED_STRING -> string
         | DQUOTED_STRING -> string
+        | variable
+        | CNAME ":" (NUMBER|STRING|variable) -> map
+
 code_block: /[^}]+/
 statement:  /[^\s]+/
 PATH: /'[^']*'|"[^"]*"/
