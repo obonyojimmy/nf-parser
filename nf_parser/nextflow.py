@@ -1,7 +1,7 @@
 from lark import Transformer, v_args, Discard
 from typing import List
-from ..schemas import *
-from ..utils import flatten_list
+from .schemas import *
+from .utils import flatten_list
 
 @v_args(inline=True)
 class NextflowTransformer(Transformer):

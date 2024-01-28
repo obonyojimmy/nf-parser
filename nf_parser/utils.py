@@ -8,7 +8,7 @@ def get_grammer() -> str:
 	-------
 	str: the grammer content
 	"""
-	with resources.path("nf_parser", "grammer/nf.lark") as f:
+	with resources.path("nf_parser", "nf.lark") as f:
 		grammer= Path(f).read_text()
 	return grammer
 
