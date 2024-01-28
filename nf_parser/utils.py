@@ -8,7 +8,7 @@ def get_grammer() -> str:
 	-------
 	str: the grammer content
 	"""
-	with resources.path("nf_parser", "grammer/nf.lark") as f:
+	with resources.path("nf_parser", "nf.lark") as f:
 		grammer= Path(f).read_text()
 	return grammer
 
@@ -27,4 +27,14 @@ def value_type(value):
 		return True
 	except (TypeError, ValueError):
 		return False """
+	
+## utils
+def flatten_list(lst):
+	result = []
+	for item in lst:
+		if isinstance(item, list):
+			result.extend(flatten_list(item))
+		else:
+			result.append(item)
+	return result
 
