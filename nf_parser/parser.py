@@ -2,7 +2,7 @@ from lark import Lark, Transformer, v_args, Discard, Tree, Token
 import re
 from pathlib import Path
 from .utils import get_grammer
-from .transformers.nextflow import Nextflow
+from .transformers.nextflow import NextflowTransformer
 
 """ 
 	Links:
@@ -13,10 +13,8 @@ class Parser:
 	def __init__(self):
 		self.comments = []
 		file = get_grammer()
-		#file = f'./nf.lark'
-		#print(file)
-		self.lang = Path(file).read_text()
-		self.transformer = Nextflow()
+		self.lang = get_grammer()
+		self.transformer = NextflowTransformer()
 		self._PARSER = Lark(
 			self.lang, 
 			parser='lalr', 

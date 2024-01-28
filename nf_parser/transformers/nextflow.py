@@ -1,280 +1,426 @@
-from pathlib import Path
-from lark import Lark, Transformer, v_args, Discard, Tree, Token
-import re
-from .. import utils
+from lark import Transformer, v_args, Discard
+from typing import List
+from ..schemas import *
+from ..utils import flatten_list
 
-#__dir__ = Path(__file__).parent
-
-class Nextflow(Transformer):
-	INT = int
-	NUMBER = float
+@v_args(inline=True)
+class NextflowTransformer(Transformer):
+	proceses: List[Process] = []
+	#def __default__(self, data, c, h):
+	#	return Discard
+	CNAME = lambda _, v: str(v)
+	STRING = lambda _, v: str(v)
+	float = lambda _, v: float(v)
+	int = lambda _, v: int(v)
+	string = lambda _, v: str(v)
+	variable = lambda _, v: str(v)
+	map = lambda _, k, v: {k: v}
 
 	def __init__(self):
-		self.param_list = {}
-		self.module_list = []
-		self.workflows = {}
-		self.processes = {}
-		self._configs = {}
-
-	@v_args(inline=True)
-	def import_entry(self, name, path):
-		return {"type": "import", "module": name, "path": path.value}
+		super().__init__()
 	
-	@v_args(inline=True)
-	def module_entry(self, *args):
-		path = args[-1]
-		items = args[0:-1]
-		imports = [m.value for m in items]
-		module_def = {
-			'module': "include {" + f"{','.join(imports)}"  + "} from './module/1.nf'",
-			'imports': imports,
-			'path': path
-		}
-		self.module_list.append(module_def)
-		return {'type': 'module', 'modules': imports, 'path': path}
-	
-	@v_args(inline=True)
-	def parameter_entry(self, key, value=None, comment=None, *args):
-		print(key, value)
-		if not key:
-			return None
-		default_val = value
-		#print(default_val)
-		val_type = utils.value_type(default_val)
-		self.param_list[key.value] = {
-			'name':  key.value, 
-			'type':  val_type, 
-			'default_value':  default_val,
-			'description':  comment,
-		}
-		return {'type': 'param',  "value": (key, value, comment) }
-
-	@v_args(inline=True)
-	def workflow_block(self, name, body=None):
-		if not body:
-			body = name
-			name = 'main'
-		print('workflow_block.body', body)
-		wf_body = {}
-		for c in body.children:
-			print(c, type(c))
-			if not c:
-				continue
-			if isinstance(c, Token):
-				print(c, c.type)
-				#continue
-				if c.type == 'COMMENT':
-					continue
-			#print(c.pretty())
-			wf_body[c.data] = c.children
+	@v_args(inline=False)
+	def start(self, items) -> Pipeline:
+		comments, modules,  processes, workflows, params, functions = None, None, None, None, None, None
+		for item in items:
+			if type(item) == Comment:
+				if not comments:
+					comments = []
+				comments.append(item)
+			elif type(item) == Module:
+				if not modules:
+					modules = []
+				modules.append(item)
+			elif type(item) == Param:
+				if not params:
+					params = []
+				params.append(item)
+			elif type(item) == Process:
+				if not processes:
+					processes = []
+				processes.append(item)
+			elif type(item) == Workflow:
+				if not workflows:
+					workflows = []
+				workflows.append(item)
+			elif type(item) == Function:
+				if not functions:
+					functions = []
+				functions.append(item)
+		pipeline = Pipeline(
+			modules=modules, 
+			params=params, 
+			processes=processes, 
+			functions=functions,
+			workflows=workflows
+		)
+		return pipeline
 		
-		self.workflows[name] = wf_body
-		return {'type': 'workfow',  "value": (name, body) }
 	
-	""" @v_args(tree=True)
-	def workflow_body(self, tree):
-		print('workflow_body =>', tree)
-		return tree """
-	
-	#@v_args(inline=True)
-	""" def instruction(self, val):
-		print('instruction =>', val)
-		return val """
-	
-	@v_args(inline=True)
-	def function_call(self, name, *args):
-		print('function_call =>', name, args)
-		return {name : {'args': list(args)}}
-	
-	@v_args(inline=True)
-	def func_dot_call(self, name, *args):
-		print('func_dot_call.before =>', name, args)
-		if len(args) == 0:
-			first_key, first_value = next(iter(name.items()))
-			name = first_key.value
-			args = first_value
-		else:
-			first_key, first_value = next(iter(args[0].items()))
-			name = f'{name}.{first_key.value}'
-			args = first_value
-		print('func_dot_call.after =>', name, args)
-		return {name : {'args': list(args)}}
-	
-	@v_args(inline=True)
-	def pipe_func_call(self, name):
-		print('pipe_func_call =>', name)
-		args = [] # todo: args come from previous token
+	def dsl(self, item):
+		pass
+
+	def comment(self, item):
+		return Comment(text=str(item))
+
+	@v_args(inline=False)
+	def module_import(self, items):
+		print("module_import:", items)
+		mod_path = items[-1]
+		mods = items[:-1]
+		return Module(path=mod_path, imports=mods)
+
+	def param(self, name, default_val=None, comment=None):
+		# todo: detect the param value type from use or default_value
+		_type = 'string'
+		return Param(name=name, type=_type, default_value=default_val, comment=comment)
+
+	@v_args(inline=False)
+	def function(self, items:list):
+		print("function:", items)
+		name, code = items.pop(0) , items.pop(-1)
+		args = []
+		if items:
+			args = items[0]
+		#print("args:", args)
+		return Function(name=name, code=code, args=args)
+
+	@v_args(inline=False)
+	def workflow(self, name, items=None):
+		print('workflow:', name, items)
+		if not items:
+			items = name
+			name = 'main'
+		comments, expressions, channels = [], [], []
+		for item in flatten_list(items):
+			if type(item) == Comment:
+				comments.append(item)
+			elif type(item) == Expression:
+				expressions.append(item)
+			elif isinstance(item, Expression):
+				expressions.append(item)
+		print('workflow:', name, expressions, comments)
+		return Workflow(
+			name=name, 
+			expressions=expressions, 
+			#channels=channels, 
+			comments=comments or None
+		)
+
+	def process(self, name, items) -> Process:
+		print('process:',items)
+		return Process(name=name, **items)
+
+	@v_args(inline=False)
+	def workflow_block(self, items):
+		items = flatten_list(items)
+		print('workflow_block:', items)
+		return items
+
+	def workflow_input(self, item):
+		return Input(name="take", value=item)
+
+	@v_args(inline=False)
+	def main(self, items):
+		items = flatten_list(items)
+		print('workflow.main:',items)
+		return items
+
+	def emit(self, items):
+		return items
+
+	def wf_output(self, item):
+		return Output(name="emit", value=str(item))
+
+	def channel(self, item):
+		return Channel(code=str(item))
+
+	def expression(self, item):
+		print('workflow.expression:', item)
+		return Expression(code=str(item))
+
+	@v_args(inline=False)
+	def process_block(self, items):
+		inputs, outputs, comments, scripts, directives = [], [], [], [], []
+		items = flatten_list(items)
+		print("process_block:", items)
+		for item in items:
+			if isinstance(item, Comment):
+				comments.append(item)
+			elif type(item) == Input:
+				inputs.append(item)
+			elif type(item) == Output:
+				outputs.append(item)
+			elif type(item) == Script:
+				scripts.append(item)
+			elif type(item) == Directive:
+				directives.append(item)
+			
 		return {
-			name : {
-				'args': args, 
-				"pipe": True
-			}
+			"inputs": inputs,
+			"outputs": outputs,
+			"comments": comments, 
+			"scripts": scripts,
+			"directives": directives,
 		}
+		#return f'Process Block: {items}'
+
+	@v_args(inline=False)
+	def input(self, items):
+		items = flatten_list(items)
+		#print('input:', items)
+		out = []
+		for x in items:
+			if isinstance(x, dict):
+				x = Input(**x)
+			out.append(x)
+		#print('input-transformed:', items)
+		return out
+
+	@v_args(inline=False)
+	def output(self, items):
+		items = flatten_list(items)
+		#print('output:', items)
+		out = []
+		for x in items:
+			if isinstance(x, dict):
+				x = Output(**x)
+			out.append(x)
+		#print('output-transformed:', items)
+		return out
 	
-	@v_args(inline=True)
-	def func_arg(self, *val):
-		return '.'.join(val)
+	@v_args(inline=False)
+	def script(self, items):
+		#items = flatten_list(items)
+		print('script:', items)
+		return items
+
+	def shell(self, items):
+		return items
+
+	def exec(self, val):
+		## todo: improve grammer parsing, might break
+		return Script(type="exec", code=str(val))
+
+	def directive(self, item):
+		print('directive:', item)
+		return item
+
+	def bash_script(self, val):
+		## todo: check the shebang of script if provided to annotate correct script type
+		return Script(type="bash", code=str(val))
+
+	def shell_script(self, val):
+		return Script(type="shell", code=str(val))
+
+	def template(self, val):
+		# todo: get the script template source from the template path
+		return Script(type="shell", code=str(val), template=str(val))
+
+	def if_script(self, val):
+		## todo: separate condition from expression
+		return Script(type="bash", code=str(val), condition="if")
+
+	def elif_script(self, val):
+		## todo: separate condition from expression
+		return Script(type="bash", code=str(val), condition="elif")
+
+	def else_script(self, val):
+		## todo: separate condition from expression
+		return Script(type="bash", code=str(val), condition="else")
+
+	@v_args(inline=False)
+	def conditional_script(self, items):
+		print('conditional_script:', items)
+		return items
+
+	def val(self, value):
+		return {"name":"val", "value":value}
+
+	def file(self, value):
+		print('file:', value)
+		return {"name":"file", "value":value}
 	
-	@v_args(inline=True)
-	def emit_arg(self, *val):
-		return '.'.join(val)
+	def path(self, value):
+		return {"name":"path", "value":value}
 	
-	@v_args(inline=True)
-	def emit_named_arg(self, name, val):
-		return {name: val}
-
-	@v_args(inline=True)
-	def process_block(self, name, body):
-		print(name)
-		p_def = {}
-		for c in body.children:
-			print(c)
-			if not c:
-				continue
-			#print(c.pretty())
-			#if c[0] not in ['script', 'shell', 'input', 'output']:
-			p_def[c[0]] = c[1]
-		self.processes[name] = p_def
-		return {'type': 'process',  "value": (name, body) }
-
-	@v_args(inline=True)
-	def directive(self, d_type, expr, *args):
-		if not d_type:
-			return None
-		return (d_type.value, expr)
-
-	@v_args(inline=True)
-	def script(self, c=None, body=None, *args):
-		if not body:
-			body = c
-		print('script', body, args)
-		return ('script', body)
+	def env(self, value):
+		return {"name":"env", "value":value}
 	
-	@v_args(inline=True)
-	def shell(self, body):
-		return ('shell', body)
+	def stdin(self, value):
+		return {"name":"stdin", "value":value}
 
-	@v_args(inline=True)
-	def input(self, *input_defs):
-		_inputs = list(filter(lambda v: v is not None, input_defs))
-		return ('input', list(_inputs))
+	def tuple(self, value):
+		return {"name":"tuple", "value":value}
 	
-	@v_args(inline=True)
-	def output(self, *output_defs):
-		_outputs = list(filter(lambda v: v is not None, output_defs))
-		return ('output', list(_outputs))
+	def each(self, value):
+		return {"name":"each", "value":value}
+
+	def accelerator(self, val, options=None):
+		print(f'queue:', val, options)
+		return Directive(name="accelerator", value=str(val), options=options)
 	
-	@v_args(inline=True)
-	def expression(self, val, *options):
-		dt = {'value': val}
-		if len(options) != 0:
-			dt['options'] = list(options)
-		return dt
+	def before_script(self, val, options=None):
+		print(f'before_script:', val, options)
+		return Directive(name="before_script", value=str(val), options=options)
+	
+	def after_script(self, val, options=None):
+		print(f'after_script:', val, options)
+		return Directive(name="after_script", value=str(val), options=options)
+	
+	def cluster_options(self, val, options=None):
+		print(f'cluster_options:', val, options)
+		return Directive(name="cluster_options", value=str(val), options=options)
+	
+	def conda(self, val, options=None):
+		print(f'conda:', val, options)
+		return Directive(name="conda", value=str(val), options=options)
+	
+	def cache(self, val, options=None):
+		print(f'cache:', val, options)
+		return Directive(name="cache", value=str(val), options=options)
+	
+	def cpus(self, val, options=None):
+		print(f'cpus:', val, options)
+		return Directive(name="cpus", value=str(val), options=options)
+	
+	def container(self, val, options=None):
+		print(f'container:', val, options)
+		return Directive(name="container", value=str(val), options=options)
+	
+	def container_options(self, val, options=None):
+		print(f'container_options:', val, options)
+		return Directive(name="container_options", value=str(val), options=options)
+	
+	def debug(self, val, options=None):
+		print(f'debug:', val, options)
+		return Directive(name="debug", value=str(val), options=options)
+	
+	def disk(self, val, options=None):
+		print(f'disk:', val, options)
+		return Directive(name="disk", value=str(val), options=options)
+	
+	def echo(self, val, options=None):
+		print(f'echo:', val, options)
+		return Directive(name="echo", value=str(val), options=options)
+	
+	def error_strategy(self, val, options=None):
+		print(f'error_strategy:', val, options)
+		return Directive(name="error_strategy", value=str(val), options=options)
+	
+	def executor(self, val, options=None):
+		print(f'executor:', val, options)
+		return Directive(name="executor", value=str(val), options=options)
+	
+	def ext(self, val, options=None):
+		print(f'ext:', val, options)
+		return Directive(name="ext", value=str(val), options=options)
+	
+	def fair(self, val, options=None):
+		print(f'fair:', val, options)
+		return Directive(name="fair", value=str(val), options=options)
+	
+	def label(self, val, options=None):
+		print(f'label:', val, options)
+		return Directive(name="label", value=str(val), options=options)
+	
+	def machine_type(self, val, options=None):
+		print(f'machine_type:', val, options)
+		return Directive(name="machine_type", value=str(val), options=options)
+	
+	def max_errors(self, val, options=None):
+		print(f'max_errors:', val, options)
+		return Directive(name="max_errors", value=str(val), options=options)
+	
+	def max_forks(self, val, options=None):
+		print(f'max_forks:', val, options)
+		return Directive(name="max_forks", value=str(val), options=options)
+	
+	def max_retries(self, val, options=None):
+		print(f'max_retries:', val, options)
+		return Directive(name="max_retries", value=str(val), options=options)
+	
+	def memory(self, val, options=None):
+		print(f'memory:', val, options)
+		return Directive(name="memory", value=str(val), options=options)
+	
+	def module(self, val, options=None):
+		print(f'module:', val, options)
+		return Directive(name="module", value=str(val), options=options)
+	
+	def penv(self, val, options=None):
+		print(f'penv:', val, options)
+		return Directive(name="penv", value=str(val), options=options)
+	
+	def pod(self, val, options=None):
+		print(f'pod:', val, options)
+		return Directive(name="pod", value=str(val), options=options)
+	
+	#@v_args(inline=False)
+	def publish_dir(self, val, options=None):
+		print(f'publish_dir:', val, options)
+		return Directive(name="publish_dir", value=str(val), options=options)
 
-	@v_args(inline=True)
-	def option(self, name, val):
-		return {name: val}
+	def queue(self, val, options=None):
+		print(f'queue:', val, options)
+		return Directive(name="queue", value=str(val), options=options)
+	
+	def resource_labels(self, val, options=None):
+		print(f'resource_labels:', val, options)
+		return Directive(name="resource_labels", value=str(val), options=options)
+	
+	def scratch(self, val, options=None):
+		print(f'scratch:', val, options)
+		return Directive(name="scratch", value=str(val), options=options)
+	
+	def spack(self, val, options=None):
+		print(f'spack:', val, options)
+		return Directive(name="spack", value=str(val), options=options)
+	
+	def store_dir(self, val, options=None):
+		print(f'store_dir:', val, options)
+		return Directive(name="store_dir", value=str(val), options=options)
+	
+	def stage_in_mode(self, val, options=None):
+		print(f'stage_in_mode:', val, options)
+		return Directive(name="stage_in_mode", value=str(val), options=options)
+	
+	def stage_out_mode(self, val, options=None):
+		print(f'stage_out_mode:', val, options)
+		return Directive(name="stage_out_mode", value=str(val), options=options)
+	
+	def tag(self, val, options=None):
+		print(f'tag:', val, options)
+		return Directive(name="tag", value=str(val), options=options)
 
-	@v_args(inline=True)
-	def input_def(self, name, val={}):
-		return {name: val}
+	def time(self, val, options=None):
+		print(f'time:', val, options)
+		return Directive(name="time", value=str(val), options=options)
 
-	""" @v_args(inline=True)
-	def output_def(self, *args):
-		print('output_def=>', args)
-		name = args[0]
-		val = args[1] if len(args) > 2 else {}
-		return {name: val} """
+	@v_args(inline=False)
+	def args(self, items):
+		items = flatten_list(items)
+		#print("args::", items)
+		return items
 
-	@v_args(inline=True)
-	def output_def(self, name, val={}):
-		return {name: val}
+	def arg(self, name):
+		return Arg(name=name) 
 
-	@v_args(inline=True)
-	def tuple_def(self, *args):
-		print('tuple_def=>', args)
-		return args
-
-	@v_args(inline=True)
-	def script_body(ws, val):
-		#print('script_body=>', val)
+	def identifier(self, val):
 		return val
 
-	@v_args(inline=True)
-	def conditional_script(self, *expr):
-		print('conditional_script=>', expr)
-		return list(expr)
-
-	@v_args(inline=True)
-	def if_script(self, expr, script):
-		print('if_script=>', expr, script)
-		return {'if': (expr, script)}
-	
-	@v_args(inline=True)
-	def else_if_script(self, expr, script):
-		return {'elif': (expr, script)}
-	
-	@v_args(inline=True)
-	def else_script(self, script):
-		return {'else': script}
-	
-	@v_args(inline=True)
-	def comparison_expression(self, *args):
-		return list(args)
-
-	@v_args(inline=True)
-	def SCRIPT(self, val):
-		#print('SCRIPT', val)
-		return val.strip('"').strip("'").strip()
-
-	@v_args(inline=True)
-	def QUALIFIER(self, val):
-		return val.strip()
-
-	@v_args(inline=True)
-	def STRING(self, val):
-		return val.strip('"').strip("'").strip()
-	
-	@v_args(inline=True)
-	def FILE_PATH(self, val):
-		return val.strip('"').strip("'").strip()
-	
-	@v_args(inline=True)
-	def CNAME(self, val):
+	def declaration(self, val):
 		return val
-	
-	@v_args(inline=True)
-	def VALUE(self, val):
-		return val.strip('"').strip("'").strip()
-	
-	@v_args(inline=True)
-	def PARAM_COMMENT(self, comment_str):
-		return comment_str.strip('//').strip()
-	
-	@v_args(inline=True)
-	def COMMENT(self, comment_str):
-		return None
-	
-	@v_args(inline=True)
-	def comment(self, *args):
-		return None
-	
-	def start(self, tree):
-		self.meta_params = {
-			"modules": self.module_list,
-			"params": self.param_list,
-			"workflows": self.workflows,
-			"processes": self.processes,
-		}
-		return self.meta_params
 
-	
-	def config(self, tree):
-		# todo
-		return tree
-	
-	#@v_args(inline=True)
-	#def unknown_entry(self, children):
-	#	return Discard
+	def value(self, val):
+		return val
 
+	def code_block(self, val):
+		return str(val)
 
+	def statement(self, val):
+		return str(val)
+
+	def operator(self, val):
+		## todo
+		return str(val)

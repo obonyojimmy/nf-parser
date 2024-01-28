@@ -1,4 +1,4 @@
-?start: (shebang | comment | dsl | param | module_import | workflow | process | function | channel | function_call )*
+?start: (shebang | comment | dsl | param | module_import | workflow | process | function | channel | expression )*
 // | include | process | workflow
 
 // core definations
@@ -7,21 +7,23 @@ dsl.2: "nextflow.enable.dsl=" INT
 comment: (C_COMMENT | CPP_COMMENT)
 module_import: "include" "{" CNAME (";" CNAME)* "}" "from" STRING
 param: "params." CNAME "=" value? comment?
-function: "def" CNAME "(" parameters? ")" "{" code_block "}"
+function: "def" CNAME "(" args? ")" "{" code_block "}"
 workflow: "workflow" CNAME? "{" workflow_block "}"
 process: "process" CNAME "{" process_block "}"
 
 // workflow definations
 workflow_block: (workflow_input | main | emit)* comment*
 workflow_input: "take" ":" CNAME
-main: "main"? ":"? comment? (channel | function_call | operator)+
-emit: "emit" ":" (wf_output | wf_named_output)+
-wf_output: CNAME "." CNAME
-wf_named_output: CNAME "=" wf_output
+main: "main"? ":"? comment? (channel | expression | operator)+
+//emit: "emit" ":" (wf_output | wf_named_output)+
+emit: "emit" ":" wf_output+
+wf_output: /(w+\.w+)|(w+\s*?\=\s*?(w+\.w+))/
+// wf_output: CNAME "." CNAME
+// wf_named_output: CNAME "=" wf_output
 // https://regex101.com/r/tJYVJm/1
 channel: /(\w+\s*?=)?\s*?[C|c]hannel\s*?(\.(fromList|fromPath|fromFilePairs|fromSRA|from|of|empty|value|watchPath)\(([\s\S]*?)\))/ //operator*
-function_call:  /((\w+)\s*?=)?\s*?(\w+)\(([\s\S]*?)\)(\.\w+)?/
-chained_function:  /\s+\.\S+\(((\S+)(\s+)?,?)?\)(\.(\S+))?/
+expression:  /((\w+)\s*?=)?\s*?(\w+)\(([\s\S]*?)\)(\.\w+)?/
+// chained_function:  /\s+\.\S+\(((\S+)(\s+)?,?)?\)(\.(\S+))?/
 
 // process definations
 process_block: (input | output | script | shell | directive | comment)*
@@ -89,7 +91,7 @@ tag: "tag" value
 time: "time" value
 
 // GENERAL
-parameters: arg ("," arg)*
+args: arg ("," arg)*
 arg: CNAME ( "." CNAME )?
 variable: CNAME
 identifier: CNAME

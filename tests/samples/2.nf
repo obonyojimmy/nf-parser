@@ -1,3 +1,18 @@
+include { foo; bar } from './module/1.nf'
+
+params.query = "$baseDir/data/sample.fa"
+params.db = "$baseDir/blast-db/pdb/tiny" // path to db folder
+params.out = "result.txt"
+params.chunkSize = 100 // the chunk size
+
+def foo() {
+    'Hello world'
+}
+
+def bar(alpha, omega) {
+    alpha + omega
+}
+
 process align {
     publishDir "${params.outdir}", mode: 'copy'
     
@@ -24,4 +39,10 @@ process align {
         mafft --anysymbol --parttree --quiet $sequences > out_file
         """
 
+}
+
+workflow  { 
+    data = channel.fromPath('/some/path/*.txt')
+    foo()
+    bar(data)
 }
