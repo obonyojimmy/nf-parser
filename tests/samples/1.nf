@@ -11,12 +11,12 @@ params.chunkSize = 100
  
 db_name = file(params.db).name
 db_dir = file(params.db).parent
- 
+scores_files_py = collect { "'${it}'" }
 
 nextflow.enable.dsl=2
 
-include { foo } from './module/1.nf'
-include { BAR } from './module/2.nf'
+//include { foo } from './module/1.nf'
+//include { BAR } from './module/2.nf'
 
 db_name = file(params.db).name
 

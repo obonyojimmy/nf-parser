@@ -83,8 +83,9 @@ process align {
 
     // a comment
     script:
-    if(1 == 1)
     // script comment
+    if(1 == 1)
+    
         """
         t_coffee -in $sequences > out_file
         """
