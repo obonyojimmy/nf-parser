@@ -6,6 +6,7 @@ shebang: SH_COMMENT
 dsl.2: "nextflow.enable.dsl=" INT
 comment: (C_COMMENT | CPP_COMMENT)
 module_import: "include" "{" CNAME (";" CNAME)* "}" "from" STRING
+//module_import.2: /include { foo; bar } from/ STRING
 param: "params." CNAME "=" value? comment?
 function: "def" CNAME "(" args? ")" "{" code_block "}"
 workflow: "workflow" CNAME? "{" workflow_block "}"
@@ -22,14 +23,26 @@ wf_output: /(w+\.w+)|(w+\s*?\=\s*?(w+\.w+))/
 // wf_named_output: CNAME "=" wf_output
 // https://regex101.com/r/tJYVJm/1
 channel: /(\w+\s*?=)?\s*?[C|c]hannel\s*?(\.(fromList|fromPath|fromFilePairs|fromSRA|from|of|empty|value|watchPath)\(([\s\S]*?)\))/ //operator*
-expression:  /((\w+)\s*?=)?\s*?(\w+)\(([\s\S]*?)\)(\.\w+)?/
+//expression: /((def\s+?){0,1}\w+\s*?=\s*?){0,1}(\w+|(\.\w+))+?\s*?\((.*?)\)(\.\w+)?/ | closure
+//expression: /^\s*?(?!\b(include|private)\s*{)((def\s+?)?\w+\s*?=){0,1}\s*?(\w+|(\.\w+)?)+?\s*?\{((?:[^}{]+|\{(?:[^}{]+)*\})*)\}|((def\s+?)?\w+\s*?=){0,1}\s*?(\w+|(\.\w+))+?\s*?\((.*?)\)(\.\w+)?/m
+expression: /(^\s*?(?!\b(include|private|if)\s*{)((def\s+?)?\w+\s*?=){0,1}\s*?(\w+|(\.\w+)?)+?\s*?\{((?:[^}{]+|\{(?:[^}{]+)*\})*)\}(\.\w+\s*?\((.*?)\)(\.\w+)?)*)|((def\s+?)?\w+\s*?=){0,1}\s*?(\w+|(\.\w+))+?\s*?\((.*?)\)(\.\w+)?/m
+// https://regex101.com/r/LzWFxu/1
+// https://regex101.com/r/hstNNZ/3
+//expression:  /((def\s+?)?\w+\s*?=){0,1}\s*?(\w+|(\.\w+)?)+?\s*?\{((?:[^}{]+|\{(?:[^}{]+)*\})*)\}|((def\s+?)?\w+\s*?=){0,1}\s*?(\w+|(\.\w+))+?\s*?\((.*?)\)(\.\w+)?/
+//expression.0:  /((def\s+?)?\w+\s*?=){0,1}\s*?(\w+|(\.\w+)?)+?\s*?\{((?:[^}{]+|\{(?:[^}{]+)*\})*)\}|((def\s+?)?\w+\s*?=){0,1}\s*?(\w+|(\.\w+))+?\s*?\((.*?)\)(\.\w+)?/
 // chained_function:  /\s+\.\S+\(((\S+)(\s+)?,?)?\)(\.(\S+))?/
+// https://regex101.com/r/OltubN/1
+// https://regex101.com/r/OltubN/4
+//closure: /^(?!\b(include|private)\s*{)(((def\s+?){0,1}\w+\s*?=\s*?){0,1}(\w+|(\.\w+)?)+?\s*?\{((?:[^}{]+|\{(?:[^}{]+)*\})*)\})/m
+// https://regex101.com/r/OltubN/5
+closure: /^\s*?(?!\b(include|private)\s*{)(((def\s+?){0,1}\w+\s*?=\s*?){0,1}(\w+|(\.\w+)?)+?\s*?\{((?:[^}{]+|\{(?:[^}{]+)*\})*)\})/m
+
 
 // process definations
 process_block: (input | output | script | shell | directive | comment)*
 input: "input:" comment* (val | file | path | env)+
 output: "output:" comment* (val | file | path | env)+
-script: ("script:" comment* | "script:"?) WS? (bash_script | shell_script | template | conditional_script)
+script: ("script:" comment* expression* | "script:"?) WS? (bash_script | shell_script | template | conditional_script)
 shell: "shell:" shell_script
 exec: "exec:" statement
 directive: (accelerator | before_script | after_script | cluster_options | conda| cache | cpus | container | container_options | debug | disk | echo | error_strategy | executor | ext | fair | label | machine_type | max_errors | max_forks | max_retries | memory | module penv | pod | publish_dir | queue | resource_labels | scratch | spack | store_dir | stage_in_mode | stage_out_mode | tag | time)
@@ -38,16 +51,20 @@ directive: (accelerator | before_script | after_script | cluster_options | conda
 bash_script: /"{3}([\s\S]*?)"{3}/m
 shell_script: /'{3}([\s\S]*?)'{3}/m
 template: "template" STRING -> script_path
-if_script: /(if\s*?\([^)]*\)\s*\{([^}]*)\}|if\s*?\([^)]*\)\s*\n([^}]*))/m
+if_script: /if\s*?\([^)]*\)\s*?\{([^}]*)\}/sm | /if\s*?\([^)]*\)\s*\n(.*?)/sm
+//if_script: /if\s*?\([^)]*\)\s*?{\n/  (bash_script | comment*) WS? /\}/ | /if\s*?\([^)]*\)\s*\n/ (bash_script | comment*)
+// https://regex101.com/r/BmSOb7/2
+//if_script: /if\s*?\([^)]*\)\s*?\{((?:[^}{]+|\{(?:[^}{]+)*\})*)\}/m
 elif_script: /(else\sif\s*?\([^)]*\)\s*\{([^}]*)\}|else\sif\s*?\([^)]*\)\s*\n([^}]*))/m
 else_script: /(else\s*?\{([^}]*)\}|else\s*?\n([^}]*))/m
 // conditional_script: if_script | (if_script elif_script) | (if_script elif_script? else_script)
 conditional_script: if_script | elif_script+ | else_script
+//conditional_script: if_script //elif_script* else_script?
 
 // input/output constructs
 val: "val" value
-file: "file" value
-path: "path" value
+file: "file" value ("," value)*
+path: "path" value ("," value)*
 env: "env" value
 stdin: "stdin" value?
 tuple: "tuple" value
